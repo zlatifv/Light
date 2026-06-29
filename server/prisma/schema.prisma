@@ -1,0 +1,52 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// A Light user. Created the first time someone signs in via any OAuth
+// provider — there is no separate "signup" step, signing in IS signing up.
+model User {
+  id          String   @id @default(uuid())
+  displayName String
+  pfpUrl      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  accounts     OAuthAccount[]
+  deviceTokens DeviceToken[]
+}
+
+// One row per (provider, providerAccountId) — lets a single User link
+// multiple OAuth providers (e.g. sign in with Google OR GitHub, same account)
+// if you add "link another provider" later. For now, each sign-in creates
+// or matches exactly one row here.
+model OAuthAccount {
+  id                String @id @default(uuid())
+  provider          String // "google" | "github" | "discord"
+  providerAccountId String // the id Google/GitHub/Discord gives that user
+  email             String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+}
+
+// FCM push tokens, keyed by device — a user can have multiple devices.
+// Replaces the in-memory `fcmTokens` Map in the signaling server; that
+// Map gets wiped on every restart, this survives deploys.
+model DeviceToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  platform  String // "android" | "ios" | "web"
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
